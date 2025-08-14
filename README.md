@@ -48,7 +48,30 @@ pip install -r requirements.txt
 
 ### 4. LDAP Konfigürasyonu
 
-`ldap_config.py` dosyasını kendi LDAP sunucu bilgilerinizle güncelleyin:
+#### ING Bank LDAP Konfigürasyonu (Önerilen)
+
+`ldap_config.py` dosyası zaten ING Bank LDAP yapısına uygun şekilde yapılandırılmıştır:
+
+```python
+LDAP_CONFIG = {
+    "server": "ldaps://bankanet.com.tr:636",
+    "ssl_certificate": "/data/starburst/SSL/ldap.crt",
+    "ssl_verify": True,
+    "allow_insecure": False,
+    "base_dn": "DC=domain,DC=bankanet,DC=com,DC=tr",
+    "user_base_dn": "OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr",
+    "bind_dn": "CN=SVCDATABEES,OU=Users,OU=Applications,DC=domain,DC=bankanet,DC=com,DC=tr",
+    "bind_password": "secure_password",
+    "group_dn": "CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr",
+    "group_auth_pattern": "(&(sAMAccountName=${USER})(memberOf=CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr))",
+    "user_filter_attribute": "sAMAccountName",
+    "group_member_attribute": "memberOf"
+}
+```
+
+#### Özel LDAP Konfigürasyonu
+
+Kendi LDAP sunucunuz için `ldap_config.py` dosyasını güncelleyin:
 
 ```python
 LDAP_CONFIG = {
@@ -63,6 +86,25 @@ LDAP_CONFIG = {
 ```
 
 #### Environment Variable Kullanımı (Güvenlik için)
+
+**ING Bank LDAP için:**
+
+```bash
+export LDAP_SERVER="ldaps://bankanet.com.tr:636"
+export LDAP_SSL_CERTIFICATE="/data/starburst/SSL/ldap.crt"
+export LDAP_SSL_VERIFY="true"
+export LDAP_ALLOW_INSECURE="false"
+export LDAP_BASE_DN="DC=domain,DC=bankanet,DC=com,DC=tr"
+export LDAP_USER_BASE_DN="OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr"
+export LDAP_BIND_DN="CN=SVCDATABEES,OU=Users,OU=Applications,DC=domain,DC=bankanet,DC=com,DC=tr"
+export LDAP_BIND_PASSWORD="your_secure_password"
+export LDAP_GROUP_DN="CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr"
+export LDAP_GROUP_AUTH_PATTERN="(&(sAMAccountName=\${USER})(memberOf=CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr))"
+export LDAP_USER_FILTER_ATTR="sAMAccountName"
+export LDAP_GROUP_MEMBER_ATTR="memberOf"
+```
+
+**Genel LDAP için:**
 
 ```bash
 export LDAP_SERVER="ldap://ldap.company.com:389"

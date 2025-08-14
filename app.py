@@ -5,20 +5,34 @@ from ldap_config import LDAP_CONFIG
 
 def ldap_authenticate(username, password):
     """
-    LDAP sunucusunda kullanıcı kimlik doğrulaması yapar
+    LDAP sunucusunda kullanıcı kimlik doğrulaması yapar (SSL sertifika desteği ile)
     """
     try:
         # LDAP sunucusuna bağlan
         ldap_client = ldap.initialize(LDAP_CONFIG["server"])
         ldap_client.set_option(ldap.OPT_REFERRALS, 0)
         
+        # SSL sertifika ayarları
+        if LDAP_CONFIG.get("ssl_certificate") and os.path.exists(LDAP_CONFIG["ssl_certificate"]):
+            ldap_client.set_option(ldap.OPT_X_TLS_CACERTFILE, LDAP_CONFIG["ssl_certificate"])
+            ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+        else:
+            # SSL sertifika yoksa güvenlik ayarlarını kontrol et
+            if LDAP_CONFIG.get("allow_insecure", False):
+                ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+            else:
+                ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+        
+        # SSL bağlantısını başlat
+        ldap_client.start_tls_s()
+        
         # Admin olarak bind ol
         ldap_client.simple_bind_s(LDAP_CONFIG["bind_dn"], LDAP_CONFIG["bind_password"])
         
-        # Kullanıcıyı ara
+        # Kullanıcıyı ara (user_base_dn kullanarak)
         user_filter = f"({LDAP_CONFIG['user_filter_attribute']}={username})"
         user_search = ldap_client.search_s(
-            LDAP_CONFIG["base_dn"], 
+            LDAP_CONFIG.get("user_base_dn", LDAP_CONFIG["base_dn"]), 
             ldap.SCOPE_SUBTREE, 
             user_filter
         )
@@ -31,13 +45,25 @@ def ldap_authenticate(username, password):
         # Kullanıcı şifresi ile bind olmayı dene
         ldap_client.simple_bind_s(user_dn, password)
         
-        # Kullanıcının grupta olup olmadığını kontrol et
-        group_filter = f"(&(objectClass=groupOfNames)({LDAP_CONFIG['group_member_attribute']}={user_dn}))"
-        group_search = ldap_client.search_s(
-            LDAP_CONFIG["group_dn"], 
-            ldap.SCOPE_BASE, 
-            group_filter
-        )
+        # Active Directory için grup kontrolü (memberOf attribute kullanarak)
+        if LDAP_CONFIG.get("group_auth_pattern"):
+            # Pattern'deki ${USER} placeholder'ını gerçek kullanıcı adı ile değiştir
+            group_filter = LDAP_CONFIG["group_auth_pattern"].replace("${USER}", username)
+            
+            # Kullanıcının base DN'inde grup kontrolü yap
+            group_search = ldap_client.search_s(
+                LDAP_CONFIG.get("user_base_dn", LDAP_CONFIG["base_dn"]), 
+                ldap.SCOPE_SUBTREE, 
+                group_filter
+            )
+        else:
+            # Eski yöntem (fallback)
+            group_filter = f"(&(objectClass=group)({LDAP_CONFIG['group_member_attribute']}={user_dn}))"
+            group_search = ldap_client.search_s(
+                LDAP_CONFIG["group_dn"], 
+                ldap.SCOPE_BASE, 
+                group_filter
+            )
         
         ldap_client.unbind()
         
@@ -50,6 +76,10 @@ def ldap_authenticate(username, password):
         return False, "Geçersiz kullanıcı adı veya şifre"
     except ldap.SERVER_DOWN:
         return False, "LDAP sunucusuna bağlanılamıyor"
+    except ldap.CONNECT_ERROR:
+        return False, "LDAP sunucusuna bağlantı hatası"
+    except ldap.TIMEOUT:
+        return False, "LDAP sunucu zaman aşımı"
     except Exception as e:
         return False, f"LDAP hatası: {str(e)}"
 
