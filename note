@@ -1,0 +1,12 @@
+        password-authenticator.name=ldap
+        ldap.url=ldaps://ldap.domain.bankanet.com.tr:636
+        ldap.ssl-trust-certificate=/data/starburst/SSL/ldap.crt
+        ldap.allow-insecure=true
+        #ldap.user-bind-pattern=uid=${USER},DC=domain,DC=bankanet,DC=com,DC=tr
+        #ldap.user-base-dn=DC=domain,DC=bankanet,DC=com,DC=tr
+        ldap.user-base-dn=OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr
+        ldap.group-auth-pattern=(&(sAMAccountName=${USER})(memberOf=CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr))
+        #ldap.bind-dn=CN=svcdbmstr,OU=Users,OU=Applications,DC=domain,DC=bankanet,DC=com,DC=tr
+        #ldap.bind-password=}tn{:9M:
+        ldap.bind-dn=CN=SVCDATABEES,OU=Users,OU=Applications,DC=domain,DC=bankanet,DC=com,DC=tr
+        ldap.bind-password=:
