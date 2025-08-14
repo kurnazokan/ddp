@@ -1,4 +1,57 @@
 import streamlit as st
+import ldap
+import ldap.filter
+from ldap_config import LDAP_CONFIG
+
+def ldap_authenticate(username, password):
+    """
+    LDAP sunucusunda kullanıcı kimlik doğrulaması yapar
+    """
+    try:
+        # LDAP sunucusuna bağlan
+        ldap_client = ldap.initialize(LDAP_CONFIG["server"])
+        ldap_client.set_option(ldap.OPT_REFERRALS, 0)
+        
+        # Admin olarak bind ol
+        ldap_client.simple_bind_s(LDAP_CONFIG["bind_dn"], LDAP_CONFIG["bind_password"])
+        
+        # Kullanıcıyı ara
+        user_filter = f"({LDAP_CONFIG['user_filter_attribute']}={username})"
+        user_search = ldap_client.search_s(
+            LDAP_CONFIG["base_dn"], 
+            ldap.SCOPE_SUBTREE, 
+            user_filter
+        )
+        
+        if not user_search:
+            return False, "Kullanıcı bulunamadı"
+        
+        user_dn = user_search[0][0]
+        
+        # Kullanıcı şifresi ile bind olmayı dene
+        ldap_client.simple_bind_s(user_dn, password)
+        
+        # Kullanıcının grupta olup olmadığını kontrol et
+        group_filter = f"(&(objectClass=groupOfNames)({LDAP_CONFIG['group_member_attribute']}={user_dn}))"
+        group_search = ldap_client.search_s(
+            LDAP_CONFIG["group_dn"], 
+            ldap.SCOPE_BASE, 
+            group_filter
+        )
+        
+        ldap_client.unbind()
+        
+        if group_search:
+            return True, "Kullanıcı doğrulandı ve grupta bulundu"
+        else:
+            return False, "Kullanıcı doğrulandı ancak gerekli grupta değil"
+            
+    except ldap.INVALID_CREDENTIALS:
+        return False, "Geçersiz kullanıcı adı veya şifre"
+    except ldap.SERVER_DOWN:
+        return False, "LDAP sunucusuna bağlanılamıyor"
+    except Exception as e:
+        return False, f"LDAP hatası: {str(e)}"
 
 # Sayfa yapılandırması
 st.set_page_config(page_title="ING - DDP", page_icon="🔐", layout="centered", initial_sidebar_state="expanded")
@@ -1574,13 +1627,18 @@ else:
             login_button = st.button("Giriş Yap", use_container_width=True)
 
         if login_button:
-            # Kullanıcı doğrulama
-            if username in USERS and USERS[username]["password"] == password:
-                # Kullanıcı bilgilerini session'a kaydet
-                st.session_state.username = username
-                # SMS doğrulama sayfasına yönlendir
-                st.session_state.show_sms = True
-                st.rerun()
+            if username and password:
+                # LDAP ile kullanıcı doğrulama
+                auth_success, auth_message = ldap_authenticate(username, password)
+                
+                if auth_success:
+                    # Kullanıcı bilgilerini session'a kaydet
+                    st.session_state.username = username
+                    # SMS doğrulama sayfasına yönlendir
+                    st.session_state.show_sms = True
+                    st.rerun()
+                else:
+                    st.error(f"❌ {auth_message}")
             else:
-                st.error("❌ Kullanıcı adı veya şifre hatalı")
+                st.error("❌ Kullanıcı adı ve şifre gerekli")
     st.markdown('</div>', unsafe_allow_html=True) 
