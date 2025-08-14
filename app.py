@@ -1,87 +1,134 @@
 import streamlit as st
-import ldap
-import ldap.filter
+import ldap3
+import os
 from ldap_config import LDAP_CONFIG
 
 def ldap_authenticate(username, password):
     """
-    LDAP sunucusunda kullanıcı kimlik doğrulaması yapar (SSL sertifika desteği ile)
+    LDAP sunucusunda kullanıcı kimlik doğrulaması yapar (ldap3 ile SSL sertifika desteği)
     """
     try:
-        # LDAP sunucusuna bağlan
-        ldap_client = ldap.initialize(LDAP_CONFIG["server"])
-        ldap_client.set_option(ldap.OPT_REFERRALS, 0)
+        # LDAP sunucu bilgilerini al
+        server_url = LDAP_CONFIG["server"]
+        base_dn = LDAP_CONFIG.get("user_base_dn", LDAP_CONFIG["base_dn"])
+        bind_dn = LDAP_CONFIG["bind_dn"]
+        bind_password = LDAP_CONFIG["bind_password"]
         
-        # SSL sertifika ayarları
-        if LDAP_CONFIG.get("ssl_certificate") and os.path.exists(LDAP_CONFIG["ssl_certificate"]):
-            ldap_client.set_option(ldap.OPT_X_TLS_CACERTFILE, LDAP_CONFIG["ssl_certificate"])
-            ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+        # SSL ayarlarını yapılandır
+        use_ssl = server_url.startswith('ldaps://')
+        use_tls = server_url.startswith('ldap://') and LDAP_CONFIG.get("ssl_verify", True)
+        
+        # Server oluştur
+        if use_ssl:
+            # SSL ile bağlantı
+            server = ldap3.Server(
+                server_url.replace('ldaps://', '').split(':')[0],
+                port=int(server_url.split(':')[-1]),
+                use_ssl=True,
+                tls=ldap3.Tls(
+                    ca_certs_file=LDAP_CONFIG.get("ssl_certificate") if LDAP_CONFIG.get("ssl_certificate") else None,
+                    validate=ldap3.Tls.validate_ssl_certificate if LDAP_CONFIG.get("ssl_verify", True) else ldap3.Tls.validate_none
+                ) if LDAP_CONFIG.get("ssl_certificate") or LDAP_CONFIG.get("ssl_verify", True) else None
+            )
         else:
-            # SSL sertifika yoksa güvenlik ayarlarını kontrol et
-            if LDAP_CONFIG.get("allow_insecure", False):
-                ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
-            else:
-                ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+            # Normal bağlantı
+            server = ldap3.Server(
+                server_url.replace('ldap://', '').split(':')[0],
+                port=int(server_url.split(':')[-1]),
+                use_ssl=False
+            )
         
-        # SSL bağlantısını başlat
-        ldap_client.start_tls_s()
-        
-        # Admin olarak bind ol
-        ldap_client.simple_bind_s(LDAP_CONFIG["bind_dn"], LDAP_CONFIG["bind_password"])
-        
-        # Kullanıcıyı ara (user_base_dn kullanarak)
-        user_filter = f"({LDAP_CONFIG['user_filter_attribute']}={username})"
-        user_search = ldap_client.search_s(
-            LDAP_CONFIG.get("user_base_dn", LDAP_CONFIG["base_dn"]), 
-            ldap.SCOPE_SUBTREE, 
-            user_filter
+        # Admin olarak bağlan
+        admin_conn = ldap3.Connection(
+            server,
+            user=bind_dn,
+            password=bind_password,
+            auto_bind=True
         )
         
-        if not user_search:
+        if not admin_conn.bound:
+            return False, f"Admin bağlantısı başarısız: {admin_conn.result}"
+        
+        # Kullanıcıyı ara
+        user_filter = f"({LDAP_CONFIG['user_filter_attribute']}={username})"
+        admin_conn.search(
+            search_base=base_dn,
+            search_filter=user_filter,
+            search_scope=ldap3.SUBTREE,
+            attributes=[ldap3.ALL_ATTRIBUTES]
+        )
+        
+        if not admin_conn.entries:
+            admin_conn.unbind()
             return False, "Kullanıcı bulunamadı"
         
-        user_dn = user_search[0][0]
+        user_dn = admin_conn.entries[0].entry_dn
         
-        # Kullanıcı şifresi ile bind olmayı dene
-        ldap_client.simple_bind_s(user_dn, password)
+        # Kullanıcı şifresi ile bağlanmayı dene
+        user_conn = ldap3.Connection(
+            server,
+            user=user_dn,
+            password=password,
+            auto_bind=True
+        )
         
-        # Active Directory için grup kontrolü (memberOf attribute kullanarak)
+        if not user_conn.bound:
+            admin_conn.unbind()
+            return False, "Geçersiz kullanıcı adı veya şifre"
+        
+        # Grup kontrolü
         if LDAP_CONFIG.get("group_auth_pattern"):
             # Pattern'deki ${USER} placeholder'ını gerçek kullanıcı adı ile değiştir
             group_filter = LDAP_CONFIG["group_auth_pattern"].replace("${USER}", username)
             
             # Kullanıcının base DN'inde grup kontrolü yap
-            group_search = ldap_client.search_s(
-                LDAP_CONFIG.get("user_base_dn", LDAP_CONFIG["base_dn"]), 
-                ldap.SCOPE_SUBTREE, 
-                group_filter
+            user_conn.search(
+                search_base=base_dn,
+                search_filter=group_filter,
+                search_scope=ldap3.SUBTREE,
+                attributes=[ldap3.ALL_ATTRIBUTES]
             )
+            
+            group_found = len(user_conn.entries) > 0
         else:
-            # Eski yöntem (fallback)
-            group_filter = f"(&(objectClass=group)({LDAP_CONFIG['group_member_attribute']}={user_dn}))"
-            group_search = ldap_client.search_s(
-                LDAP_CONFIG["group_dn"], 
-                ldap.SCOPE_BASE, 
-                group_filter
+            # Eski yöntem (fallback) - kullanıcının memberOf attribute'unu kontrol et
+            user_conn.search(
+                search_base=user_dn,
+                search_filter="(objectClass=user)",
+                search_scope=ldap3.BASE,
+                attributes=[LDAP_CONFIG.get("group_member_attribute", "memberOf")]
             )
+            
+            if user_conn.entries:
+                user_attrs = user_conn.entries[0]
+                group_attr = LDAP_CONFIG.get("group_member_attribute", "memberOf")
+                
+                if hasattr(user_attrs, group_attr):
+                    group_values = getattr(user_attrs, group_attr)
+                    if isinstance(group_values, list):
+                        group_found = any(LDAP_CONFIG["group_dn"] in group_value for group_value in group_values)
+                    else:
+                        group_found = LDAP_CONFIG["group_dn"] in str(group_values)
+                else:
+                    group_found = False
+            else:
+                group_found = False
         
-        ldap_client.unbind()
+        # Bağlantıları kapat
+        admin_conn.unbind()
+        user_conn.unbind()
         
-        if group_search:
+        if group_found:
             return True, "Kullanıcı doğrulandı ve grupta bulundu"
         else:
             return False, "Kullanıcı doğrulandı ancak gerekli grupta değil"
             
-    except ldap.INVALID_CREDENTIALS:
-        return False, "Geçersiz kullanıcı adı veya şifre"
-    except ldap.SERVER_DOWN:
-        return False, "LDAP sunucusuna bağlanılamıyor"
-    except ldap.CONNECT_ERROR:
-        return False, "LDAP sunucusuna bağlantı hatası"
-    except ldap.TIMEOUT:
-        return False, "LDAP sunucu zaman aşımı"
-    except Exception as e:
+    except ldap3.core.exceptions.LDAPBindError as e:
+        return False, f"LDAP bağlantı hatası: {str(e)}"
+    except ldap3.core.exceptions.LDAPException as e:
         return False, f"LDAP hatası: {str(e)}"
+    except Exception as e:
+        return False, f"Genel hata: {str(e)}"
 
 # Sayfa yapılandırması
 st.set_page_config(page_title="ING - DDP", page_icon="🔐", layout="centered", initial_sidebar_state="expanded")

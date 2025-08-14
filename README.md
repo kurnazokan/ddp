@@ -46,6 +46,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+**Not**: Bu proje `ldap3>=2.9.1` kütüphanesini kullanır. `ldap3`, `python-ldap`'den daha modern ve Python 3 uyumludur.
+
 ### 4. LDAP Konfigürasyonu
 
 #### ING Bank LDAP Konfigürasyonu (Önerilen)
@@ -331,7 +333,19 @@ streamlit run app.py --logger.level debug
 
 - [LDAP Kurulum Kılavuzu](LDAP_KURULUM.md)
 - [Streamlit Dokümantasyonu](https://docs.streamlit.io/)
-- [Python LDAP Dokümantasyonu](https://www.python-ldap.org/)
+- [ldap3 Dokümantasyonu](https://ldap3.readthedocs.io/)
+- [ldap3 GitHub Repository](https://github.com/cannatag/ldap3)
+
+## 🔧 ldap3 Avantajları
+
+Bu proje `ldap3` kütüphanesini kullanır çünkü:
+
+- **Python 3 Uyumluluğu**: Tam Python 3 desteği
+- **Modern API**: Daha temiz ve anlaşılır kod yapısı
+- **SSL/TLS Desteği**: Gelişmiş güvenlik özellikleri
+- **Active Directory**: Windows AD ile mükemmel entegrasyon
+- **Hata Yönetimi**: Daha detaylı hata mesajları
+- **Performans**: Daha hızlı ve verimli çalışma
 
 ## 🤝 Katkıda Bulunma
 
