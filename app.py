@@ -20,16 +20,32 @@ def ldap_authenticate(username, password):
         
         # Server oluştur
         if use_ssl:
-            # SSL ile bağlantı
-            server = ldap3.Server(
-                server_url.replace('ldaps://', '').split(':')[0],
-                port=int(server_url.split(':')[-1]),
-                use_ssl=True,
-                tls=ldap3.Tls(
-                    ca_certs_file=LDAP_CONFIG.get("ssl_certificate") if LDAP_CONFIG.get("ssl_certificate") else None,
-                    validate=ldap3.Tls.validate_ssl_certificate if LDAP_CONFIG.get("ssl_verify", True) else ldap3.Tls.validate_none
-                ) if LDAP_CONFIG.get("ssl_certificate") or LDAP_CONFIG.get("ssl_verify", True) else None
-            )
+            # SSL ile bağlantı - basit yaklaşım
+            try:
+                # SSL sertifika varsa kullan, yoksa basit SSL
+                if LDAP_CONFIG.get("ssl_certificate") and os.path.exists(LDAP_CONFIG.get("ssl_certificate")):
+                    server = ldap3.Server(
+                        server_url.replace('ldaps://', '').split(':')[0],
+                        port=int(server_url.split(':')[-1]),
+                        use_ssl=True,
+                        tls=ldap3.Tls(
+                            ca_certs_file=LDAP_CONFIG.get("ssl_certificate")
+                        )
+                    )
+                else:
+                    # Sertifika yoksa basit SSL
+                    server = ldap3.Server(
+                        server_url.replace('ldaps://', '').split(':')[0],
+                        port=int(server_url.split(':')[-1]),
+                        use_ssl=True
+                    )
+            except Exception as e:
+                # Herhangi bir hata durumunda basit SSL kullan
+                server = ldap3.Server(
+                    server_url.replace('ldaps://', '').split(':')[0],
+                    port=int(server_url.split(':')[-1]),
+                    use_ssl=True
+                )
         else:
             # Normal bağlantı
             server = ldap3.Server(
