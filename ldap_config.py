@@ -2,6 +2,10 @@
 # Bu dosyayı kendi LDAP sunucu bilgilerinizle güncelleyin
 
 import os
+from dotenv import load_dotenv
+
+# .env dosyasını otomatik yükle
+load_dotenv()
 
 # Environment variable'dan LDAP bilgilerini al (güvenlik için)
 LDAP_CONFIG = {
@@ -48,7 +52,6 @@ LDAP_CONFIG = {
 # OpenLDAP için:
 # LDAP_CONFIG = {
 #     "server": "ldap://ldap.company.com:389",
-#     "base_dn": "dc=company,dc=com",
 #     "bind_dn": "cn=admin,dc=company,dc=com",
 #     "bind_password": "admin_password",
 #     "group_dn": "cn=allowed_users,ou=groups,dc=company,dc=com",
