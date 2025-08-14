@@ -1116,7 +1116,7 @@ if st.session_state.logged_in:
             )
             
             if not can_approve:
-                st.warning("⚠️ Dosyayı Minio'ya yüklemek için önce güvenlik kontrolü ve dosya yükleme adımlarını tamamlayın.")
+                st.warning("⚠️ Dosyayı S3'e yüklemek için önce güvenlik kontrolü ve dosya yükleme adımlarını tamamlayın.")
             else:
                 st.info("🎯 Tüm adımlar tamamlandı. Dosyayı onaya gönderebilirsiniz.")
                 
@@ -1218,7 +1218,7 @@ if st.session_state.logged_in:
                                 st.markdown(f"**🕒 Gönderim Zamanı:** {timestamp}")
                                 st.markdown(f"**📊 Durum:** ⏳ Onay Bekliyor")
                                 
-                            st.info(f"💡 Dosyanız {approver_name} tarafından onaylandıktan sonra Minio'ya yüklenecektir.")
+                            st.info(f"💡 Dosyanız {approver_name} tarafından onaylandıktan sonra S3'e yüklenecektir.")
                             
                     except Exception as e:
                         st.error(f"❌ Onaya gönderme hatası: {str(e)}")
@@ -1315,41 +1315,50 @@ if st.session_state.logged_in:
                     with col2:
                         st.markdown("**🎯 İşlemler:**")
                         
-                        # Yükle butonu (Minio'ya yükle)
+                        # Yükle butonu (S3'e yükle)
                         if st.button("📤 Yükle", key=f"upload_{upload['id']}", use_container_width=True):
                             try:
-                                from minio import Minio
-                                from minio.error import S3Error
+                                import boto3
                                 import io
                                 from datetime import datetime
+                                from botocore.exceptions import ClientError, NoCredentialsError
                                 
-                                # Minio bağlantı bilgileri
-                                endpoint = "localhost:9000"
-                                access_key = "minioadmin"
-                                secret_key = "minioadmin123"
-                                bucket_name = "data-uploads"
-                                secure = False
+                                # S3 bağlantı bilgileri (environment variables'dan al)
+                                import os
+                                s3_endpoint_url = os.getenv("S3_ENDPOINT_URL", "http://localhost:9000")
+                                aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID", "minioadmin")
+                                aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin123")
+                                bucket_name = os.getenv("S3_BUCKET_NAME", "data-uploads")
+                                region_name = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
                                 
-                                with st.spinner("📦 Dosya Minio'ya yükleniyor..."):
-                                    client = Minio(
-                                        endpoint,
-                                        access_key=access_key,
-                                        secret_key=secret_key,
-                                        secure=secure
+                                with st.spinner("📦 Dosya S3'e yükleniyor..."):
+                                    # S3 client oluştur
+                                    s3_client = boto3.client(
+                                        's3',
+                                        endpoint_url=s3_endpoint_url,
+                                        aws_access_key_id=aws_access_key_id,
+                                        aws_secret_access_key=aws_secret_access_key,
+                                        region_name=region_name
                                     )
                                     
                                     # Bucket var mı kontrol et, yoksa oluştur
-                                    if not client.bucket_exists(bucket_name):
-                                        client.make_bucket(bucket_name)
+                                    try:
+                                        s3_client.head_bucket(Bucket=bucket_name)
+                                    except ClientError as e:
+                                        error_code = e.response['Error']['Code']
+                                        if error_code == '404':
+                                            # Bucket yok, oluştur
+                                            s3_client.create_bucket(Bucket=bucket_name)
+                                        else:
+                                            raise e
                                     
-                                    # ZIP dosyasını Minio'ya yükle
+                                    # ZIP dosyasını S3'e yükle
                                     zip_filename = f"approved/{upload['timestamp']}_{upload['filename']}.zip"
-                                    client.put_object(
-                                        bucket_name,
-                                        zip_filename,
-                                        io.BytesIO(upload['zip_data']),
-                                        len(upload['zip_data']),
-                                        content_type="application/zip"
+                                    s3_client.put_object(
+                                        Bucket=bucket_name,
+                                        Key=zip_filename,
+                                        Body=io.BytesIO(upload['zip_data']),
+                                        ContentType="application/zip"
                                     )
                                     
                                     # Upload'ın durumunu güncelle
@@ -1366,15 +1375,19 @@ if st.session_state.logged_in:
                                         "file_size_mb": upload['file_size_mb'],
                                         "uploader": upload['uploader'],
                                         "status": "approved",
-                                        "details": f"Dosya onaylandı ve Minio'ya yüklendi - {zip_filename}"
+                                        "details": f"Dosya onaylandı ve S3'e yüklendi - {zip_filename}"
                                     }
                                     st.session_state.history.append(history_item)
                                     
                                     st.balloons()
-                                    st.success("🎉 Dosya başarıyla Minio'ya yüklendi!")
+                                    st.success("🎉 Dosya başarıyla S3'e yüklendi!")
                                     st.info(f"📁 Dosya konumu: `{zip_filename}`")
                                     st.rerun()
                                     
+                            except NoCredentialsError:
+                                st.error("❌ AWS kimlik bilgileri bulunamadı!")
+                            except ClientError as e:
+                                st.error(f"❌ S3 hatası: {e.response['Error']['Message']}")
                             except Exception as e:
                                 st.error(f"❌ Yükleme hatası: {str(e)}")
                         

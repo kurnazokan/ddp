@@ -7,6 +7,7 @@ Bu proje, LDAP sunucu entegrasyonu ile kullanıcı kimlik doğrulama yapan ve gr
 - **LDAP Entegrasyonu**: Kurumsal LDAP sunucuları ile entegrasyon
 - **Grup Kontrolü**: Belirli LDAP gruplarındaki kullanıcıları kontrol etme
 - **SMS Doğrulama**: İki faktörlü kimlik doğrulama sistemi
+- **S3 Storage**: AWS S3 uyumlu dosya yükleme ve yönetimi
 - **Modern UI**: Kurumsal kimliğine uygun arayüz tasarımı
 - **Güvenli Giriş**: LDAP tabanlı kullanıcı doğrulama
 - **Responsive Tasarım**: Tüm cihazlarda uyumlu çalışma
@@ -15,6 +16,7 @@ Bu proje, LDAP sunucu entegrasyonu ile kullanıcı kimlik doğrulama yapan ve gr
 
 - Python 3.8 veya üzeri
 - LDAP sunucu erişimi
+- S3 uyumlu storage (MinIO, AWS S3, vb.)
 - İnternet bağlantısı (paket yükleme için)
 
 ## 🛠️ Kurulum Adımları
@@ -104,6 +106,15 @@ export LDAP_GROUP_DN="CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUse
 export LDAP_GROUP_AUTH_PATTERN="(&(sAMAccountName=\${USER})(memberOf=CN=StarburstUsers,OU=INGBank Security Groups,OU=IngBankUsers,DC=domain,DC=bankanet,DC=com,DC=tr))"
 export LDAP_USER_FILTER_ATTR="sAMAccountName"
 export LDAP_GROUP_MEMBER_ATTR="memberOf"
+
+**S3 Storage için:**
+
+```bash
+export S3_ENDPOINT_URL="http://localhost:9000"
+export AWS_ACCESS_KEY_ID="minioadmin"
+export AWS_SECRET_ACCESS_KEY="minioadmin123"
+export S3_BUCKET_NAME="data-uploads"
+export AWS_DEFAULT_REGION="us-east-1"
 ```
 
 **Genel LDAP için:**
