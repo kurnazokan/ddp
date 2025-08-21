@@ -1606,7 +1606,14 @@ elif st.session_state.show_sms:
             }
             </style>
             """, unsafe_allow_html=True)
-            sms_code = st.text_input("SMS Kodu", placeholder="SMS Kodunu Giriniz", type="password", label_visibility="collapsed")
+            # INGKey notu
+            st.markdown("""
+            <div style="text-align: center; margin-bottom: 20px; color: #666; font-size: 14px;">
+                <a href="https://ing.com.tr/auth" target="_blank" style="color: #FF6600; text-decoration: none; font-weight: bold;">INGKey</a> uygulamasından alınacak şifreyi giriniz.
+            </div>
+            """, unsafe_allow_html=True)
+            
+            sms_code = st.text_input("SMS Kodu", placeholder="INGKEY ŞİFRESİ GİRİNİZ", type="password", label_visibility="collapsed")
             
             # Onayla butonu
             st.markdown("""
@@ -1633,7 +1640,7 @@ elif st.session_state.show_sms:
                 st.rerun()
         
         if verify_button:
-            if sms_code == "1111":
+            if sms_code == "654123":
                 st.success("✅ Giriş başarılı!")
                 # Dashboard'a yönlendir
                 st.session_state.logged_in = True

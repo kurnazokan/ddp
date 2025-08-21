@@ -281,7 +281,7 @@ Uygulama başlatıldıktan sonra:
 
 ### 3. SMS Doğrulama
 - Başarılı LDAP doğrulama sonrası SMS sayfasına yönlendirilir
-- SMS kodunu girin (demo: 1111)
+- SMS kodunu girin (demo: 654123)
 - "Onayla" butonuna tıklayın
 
 ### 4. Dashboard
